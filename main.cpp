@@ -4,9 +4,32 @@
 #include <SDL.h>
 #include <SDL_net.h>
 
-using namespace std;
-
 #pragma warning(disable : 4996)
+
+#define parseRequest() \
+for (int j = 0; j < 255; j++) buffer[j] = NULL; \
+parsePointer += 2; \
+if (request[parsePointer] == ' ') parsePointer++; \
+for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) { \
+	buffer[j] = request[parsePointer]; \
+	parsePointer++; \
+} \
+
+
+
+bool parseRequest_f(int* pPointer, int* cPointer, std::string in, std::string find) {
+	for (*cPointer = 0; in[*pPointer] == find[*cPointer]; (*cPointer)++) {
+		(*pPointer)++;
+		if (*cPointer == find.length() - 2) {
+			*cPointer = -1;
+			return true;
+		}
+	}
+	*pPointer -= *cPointer;
+	return false;
+}
+
+using namespace std;
 
 #undef main
 int main() {
@@ -75,7 +98,6 @@ int main() {
 
 	vector<string> postContents;
 	vector<int> postDate;
-	vector<vector<int>> posters;
 	vector<vector<int>> replies;
 
 	vector<string> replyContents;
@@ -87,23 +109,19 @@ int main() {
 	vector<string> pass;
 
 	const char* keywords[11];
-	keywords[0] = "\r\n\r\n"; keywords[1] = "postContents"; keywords[2] = "postDate"; keywords[3] = "posters"; keywords[4] = "replyContents";
-	keywords[5] = "replyDate"; keywords[6] = "replyAuthor"; keywords[7] = "username"; keywords[8] = "pass";
+	keywords[0] = "\r\n\r\n"; keywords[1] = "postContents"; keywords[2] = "postDate"; keywords[3] = "replyContents";
+	keywords[4] = "replyDate"; keywords[5] = "replyAuthor"; keywords[6] = "username"; keywords[7] = "pass";
 
 	char buffer[256];
 
 	postContents.push_back("test post one");
 	postDate.push_back(0);
-	posters.resize(postContents.size());
 	replies.resize(postContents.size());
-	posters[0].push_back(0);
 	replies[0].push_back(0);
 
 	postContents.push_back("post test two");
 	postDate.push_back(1);
-	posters.resize(postContents.size());
 	replies.resize(postContents.size());
-	posters[1].push_back(0);
 	replies[1].push_back(0);
 
 	replyContents.push_back("reply no1");
@@ -164,6 +182,7 @@ int main() {
 		else {
 			requestID = 0;
 		}
+		response.clear();
 
 		switch (requestMethod[0]) {
 		case 'G': {
@@ -179,13 +198,7 @@ int main() {
 					response += buffer;
 					response += "\"\n";
 
-					for (int j = 0; j < posters[i].size(); j++) {
-						response += "posters: \"";
-						response += username[posters[i][j]];
-						response += "\"\n";
-					}
-
-					for (int j = 0; j < replies[i].size() != NULL; j++) {
+					for (int j = 0; j < replies[i].size(); j++) {
 						response += "replies: \"";
 						response += replyContents[replies[i][j]];
 						response += "\"\n";
@@ -251,72 +264,80 @@ int main() {
 		crq:; // correct request
 			response += "HTTP/1.1 200 OK\r\n\r\n";
 			for (int i = 0; i < 255; i++) buffer[i] = NULL;
+			comparisonPointer = 0;
 			switch (requestType[0]) {
 			case 'p': {
 				printf("request parsed correctly\n");
 				printf("parse pointer at %d\n", parsePointer);
-				while (parsePointer <= requestLenght) {
-					for (comparisonPointer = 0; request[parsePointer] == keywords[1][comparisonPointer]; comparisonPointer++) {
-						parsePointer++;
-						if (comparisonPointer == 11) {
-							printf("!!!!!!!!! found post content\n");
-							parsePointer += 2;
-							if (request[parsePointer] == ' ') parsePointer++;
-							for (int j = 0; request[parsePointer] != '\n'; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
-							}
+				if (requestID == 0) {
+					while (parsePointer <= requestLenght) {
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[1])) {
+							printf("found post contents\n");
+							parseRequest();
+							printf("buffer = \n%s\n", buffer);
 							postContents.push_back(buffer);
-							printf("buffer = \n%s\n", buffer);
-							comparisonPointer = -1;
 						}
-					}
-					parsePointer -= comparisonPointer;
-					for (comparisonPointer = 0; request[parsePointer] == keywords[2][comparisonPointer]; comparisonPointer++) {
-						parsePointer++;
-						if (comparisonPointer == 7) {
-							for (int j = 0; j < 255; j++) buffer[j] = NULL;
-
-							printf("!!!!!!!!! found post date\n");
-							parsePointer += 2;
-							if (request[parsePointer] == ' ') parsePointer++;
-							for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
-							}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[2])) {
+							parseRequest();
+							printf("found post date\n");
+							printf("buffer = \n%s\n", buffer);
 							postDate.push_back(atoi(buffer));
-							printf("buffer = \n%s\n", buffer);
-							comparisonPointer = -1;
 						}
-					}
-					parsePointer -= comparisonPointer;
-					for (comparisonPointer = 0; request[parsePointer] == keywords[3][comparisonPointer]; comparisonPointer++) {
 						parsePointer++;
-						if (comparisonPointer == 6) {
-							for (int j = 0; j < 255; j++) buffer[j] = NULL;
-
-							printf("found posters\n");
-							parsePointer += 2;
-							for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
+						/*
+						for (comparisonPointer = 0; request[parsePointer] == keywords[2][comparisonPointer]; comparisonPointer++) {
+							parsePointer++;
+							if (comparisonPointer == 7) {
+								parseRequest(postDate.push_back(atoi(buffer)));
 							}
-							posters.resize(posters.size() + 1);
-							posters.back().push_back(atoi(buffer));
-							printf("buffer = \n%s\n", buffer);
-							comparisonPointer = -1;
 						}
-					}
-					parsePointer -= comparisonPointer;
-					parsePointer++;
+						parsePointer -= comparisonPointer;
+						for (comparisonPointer = 0; request[parsePointer] == keywords[3][comparisonPointer]; comparisonPointer++) {
+							parsePointer++;
+							if (comparisonPointer == 6) {
+								for (int j = 0; j < 255; j++) buffer[j] = NULL;
 
-				}
-				if (posters.size() != postContents.size() && posters.size() != postDate.size()) {
-					posters.pop_back();
-					postContents.pop_back();
-					postDate.pop_back();
-					response.clear();
-					response = "HTTP/1. 400 BAD REQUEST\r\n\r\n";
+								printf("found posters\n");
+								parsePointer += 2;
+								for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
+									buffer[j] = request[parsePointer];
+									parsePointer++;
+								}
+								posters.resize(posters.size() + 1);
+								posters.back().push_back(atoi(buffer));
+								printf("buffer = \n%s\n", buffer);
+								comparisonPointer = -1;
+							}
+						}
+						parsePointer -= comparisonPointer;
+						*/
+
+					}
+					if (postDate.size() != postContents.size()) {
+						postContents.pop_back();
+						postDate.pop_back();
+						response.clear();
+						response = "HTTP/1. 400 BAD REQUEST\r\n\r\n";
+					} else {
+						replies.resize(replies.size() + 1);
+					}
+				} else {
+					requestID--;
+					while (parsePointer <= requestLenght) {
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[1])) {
+							printf("found post contents\n");
+							parseRequest();
+							printf("buffer = \n%s\n", buffer);
+							postContents[requestID] = buffer;
+						}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[2])) {
+							parseRequest();
+							printf("found post date\n");
+							printf("buffer = \n%s\n", buffer);
+							postDate[requestID] = atoi(buffer);
+						}
+						parsePointer++;
+					}
 				}
 
 				break;
@@ -324,118 +345,180 @@ int main() {
 			case 'r': {
 				printf("request parsed correctly\n");
 				printf("parse pointer at %d\n", parsePointer);
-				while (parsePointer < requestLenght) {
-					for (comparisonPointer = 0; request[parsePointer] == keywords[4][comparisonPointer]; comparisonPointer++) {
-						parsePointer++;
-						if (comparisonPointer == 12) {
-							for (int j = 0; j < 255; j++) buffer[j] = NULL;
-
-							printf("found reply contents\n");
-							parsePointer += 2;
-							for (int j = 0; request[parsePointer] != '\n'; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
-							}
+				if (requestID == 0) {
+					while (parsePointer < requestLenght) {
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[3])) {
+							parseRequest();
 							replyContents.push_back(buffer);
-							printf("buffer = %s\n", buffer);
-							comparisonPointer = -1;
 						}
-					}
-					parsePointer -= comparisonPointer;
-					for (comparisonPointer = 0; request[parsePointer] == keywords[5][comparisonPointer]; comparisonPointer++) {
-						parsePointer++;
-						if (comparisonPointer == 8) {
-							for (int j = 0; j < 255; j++) buffer[j] = NULL;
-
-							printf("found reply date\n");
-							parsePointer += 2;
-							for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
-							}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[4])) {
+							parseRequest();
 							replyDate.push_back(atoi(buffer));
-							printf("buffer = %s\n", buffer);
-							comparisonPointer = -1;
 						}
-					}
-					parsePointer -= comparisonPointer;
-					for (comparisonPointer = 0; request[parsePointer] == keywords[6][comparisonPointer]; comparisonPointer++) {
-						parsePointer++;
-						if (comparisonPointer == 10) {
-							for (int i = 0; i < 255; i++) buffer[i] = NULL;
-
-							printf("found reply author\n");
-							for (int i = 0; i < 255; i++) buffer[i] = NULL;
-
-							parsePointer += 2;
-							for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
-							}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[5])) {
+							parseRequest();
 							replyAuthor.push_back(atoi(buffer));
-							printf("buffer = %s\n", buffer);
-
-							comparisonPointer = -1;
 						}
+						parsePointer++;
+						/*
+						for (comparisonPointer = 0; request[parsePointer] == keywords[4][comparisonPointer]; comparisonPointer++) {
+							parsePointer++;
+							if (comparisonPointer == 12) {
+								for (int j = 0; j < 255; j++) buffer[j] = NULL;
+
+								printf("found reply contents\n");
+								parsePointer += 2;
+								for (int j = 0; request[parsePointer] != '\n'; j++) {
+									buffer[j] = request[parsePointer];
+									parsePointer++;
+								}
+								replyContents.push_back(buffer);
+								printf("buffer = %s\n", buffer);
+								comparisonPointer = -1;
+							}
+						}
+						parsePointer -= comparisonPointer;
+						for (comparisonPointer = 0; request[parsePointer] == keywords[5][comparisonPointer]; comparisonPointer++) {
+							parsePointer++;
+							if (comparisonPointer == 8) {
+								for (int j = 0; j < 255; j++) buffer[j] = NULL;
+
+								printf("found reply date\n");
+								parsePointer += 2;
+								for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
+									buffer[j] = request[parsePointer];
+									parsePointer++;
+								}
+								replyDate.push_back(atoi(buffer));
+								printf("buffer = %s\n", buffer);
+								comparisonPointer = -1;
+							}
+						}
+						parsePointer -= comparisonPointer;
+						for (comparisonPointer = 0; request[parsePointer] == keywords[6][comparisonPointer]; comparisonPointer++) {
+							parsePointer++;
+							if (comparisonPointer == 10) {
+								for (int i = 0; i < 255; i++) buffer[i] = NULL;
+
+								printf("found reply author\n");
+								for (int i = 0; i < 255; i++) buffer[i] = NULL;
+
+								parsePointer += 2;
+								for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
+									buffer[j] = request[parsePointer];
+									parsePointer++;
+								}
+								replyAuthor.push_back(atoi(buffer));
+								printf("buffer = %s\n", buffer);
+
+								comparisonPointer = -1;
+							}
+						}
+						parsePointer -= comparisonPointer;
+						parsePointer++;
+						*/
 					}
-					parsePointer -= comparisonPointer;
-					parsePointer++;
+					if (replyContents.size() != replyDate.size() && replyContents.size() != replyAuthor.size()) {
+						replyContents.pop_back();
+						replyDate.pop_back();
+						replyAuthor.pop_back();
+						response.clear();
+						response = "HTTP/1.1 400 BAD REQUEST\r\n\r\n";
+					}
+					else {
+						postCount.resize(postCount.size() + 1);
+					}
 				}
-
-				if (replyContents.size() != replyDate.size() && replyContents.size() != replyAuthor.size()) {
-					replyContents.pop_back();
-					replyDate.pop_back();
-					replyAuthor.pop_back();
-					response.clear();
-					response = "HTTP/1.1 400 BAD REQUEST\r\n\r\n";
+				else {
+					requestID--;
+					while (parsePointer < requestLenght) {
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[3])) {
+							parseRequest();
+							replyContents[requestID] = buffer;
+						}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[4])) {
+							parseRequest();
+							replyDate[requestID] = atoi(buffer);
+						}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[5])) {
+							parseRequest();
+							replyAuthor[requestID] = atoi(buffer);
+						}
+						parsePointer++;
+					}
 				}
-
 				break;
 			}
 			case 'u': {
-				while (parsePointer < requestLenght) {
-					for (comparisonPointer = 0; request[parsePointer] == keywords[7][comparisonPointer]; comparisonPointer++) {
-						parsePointer++;
-						if (comparisonPointer == 7) {
-							printf("found username\n");
-							parsePointer += 2;
-							for (int j = 0; request[parsePointer] != '\n'; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
-							}
+				if (requestID == 0) {
+					while (parsePointer < requestLenght) {
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[6])) {
+							parseRequest();
 							username.push_back(buffer);
-							printf("buffer contents: %s\n", buffer);
-							comparisonPointer = -1;
 						}
-					}
-					parsePointer -= comparisonPointer;
-					for (comparisonPointer = 0; request[parsePointer] == keywords[8][comparisonPointer]; comparisonPointer++) {
-						parsePointer++;
-						if (comparisonPointer == 3) {
-							printf("found pass\n");
-							parsePointer += 2;
-							for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
-								buffer[j] = request[parsePointer];
-								parsePointer++;
-							}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[7])) {
+							parseRequest();
 							pass.push_back(buffer);
-							printf("buffer contents: %s\n", buffer);
-							comparisonPointer = -1;
 						}
+						parsePointer++;
+						/*
+						for (comparisonPointer = 0; request[parsePointer] == keywords[7][comparisonPointer]; comparisonPointer++) {
+							parsePointer++;
+							if (comparisonPointer == 7) {
+								printf("found username\n");
+								parsePointer += 2;
+								for (int j = 0; request[parsePointer] != '\n'; j++) {
+									buffer[j] = request[parsePointer];
+									parsePointer++;
+								}
+								username.push_back(buffer);
+								printf("buffer contents: %s\n", buffer);
+								comparisonPointer = -1;
+							}
+						}
+						parsePointer -= comparisonPointer;
+						for (comparisonPointer = 0; request[parsePointer] == keywords[8][comparisonPointer]; comparisonPointer++) {
+							parsePointer++;
+							if (comparisonPointer == 3) {
+								printf("found pass\n");
+								parsePointer += 2;
+								for (int j = 0; request[parsePointer] != '\n' && parsePointer < requestLenght; j++) {
+									buffer[j] = request[parsePointer];
+									parsePointer++;
+								}
+								pass.push_back(buffer);
+								printf("buffer contents: %s\n", buffer);
+								comparisonPointer = -1;
+							}
+						}
+						parsePointer -= comparisonPointer;
+						parsePointer++;
+						*/
 					}
-					parsePointer -= comparisonPointer;
-					parsePointer++;
-				}
-
-				break;
-			}
-
 					if (username.size() != pass.size()) {
 						username.pop_back();
 						pass.pop_back();
 						response.clear();
 						response = "HTTP/1.1 400 BAD REQUEST\r\n\r\n";
 					}
+					break;
+					
+				}
+				else {
+					requestID--;
+					while (parsePointer < requestLenght) {
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[6])) {
+							parseRequest();
+							username[requestID] = (buffer);
+						}
+						if (parseRequest_f(&parsePointer, &comparisonPointer, request, keywords[7])) {
+							parseRequest();
+							pass[requestID] = (buffer);
+						}
+						parsePointer++;
+					}
+				}
+			}
 			}
 			break;
 		}
